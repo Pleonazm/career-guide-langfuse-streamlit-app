@@ -1,2 +1,2 @@
 # career-guide-langfuse-streamlit-app
-LangFuse metric analyzer for Career Guide App
+Prototyp pomocniczego dashbordu do przeglądania metryk LangFuse dla Caree Guide
