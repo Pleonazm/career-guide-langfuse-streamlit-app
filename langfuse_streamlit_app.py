@@ -10,6 +10,8 @@ from requests.auth import HTTPBasicAuth
 from collections import Counter
 import json
 from datetime import datetime, timedelta
+from pathlib import Path
+from time import sleep
 
 # Set page config
 st.set_page_config(
@@ -30,7 +32,13 @@ class LangFuseTraceAnalyzer:
             }
         else:
             self.langfuse_credentials = self._get_langfuse_auth_info()
+
+        self._clear_local()
         
+
+
+    def _clear_local(self):
+
         self.processed_ids = set()
         self.fields_counters = {
             'total': Counter(),
@@ -41,7 +49,14 @@ class LangFuseTraceAnalyzer:
         }
         self.suggestions = []
         self.warnings = []
-        self.trace_names = Counter()  # New counter for trace names
+        self.trace_names = {}
+        self.trace_names_counters = Counter()  # New counter for trace names
+        self.usage_data = []
+        self.usage_data_traces = {}
+        self.usage_data_names = {}
+        self.usage_data_summarized = {}
+        self.trace_important_data_by_group = {}
+
 
     def _get_langfuse_auth_info(self):
         # Load .env file explicitly from current working directory
@@ -79,6 +94,7 @@ class LangFuseTraceAnalyzer:
         return auth_data
 
     def _get_traces_list(self, **kwargs):
+        
         try:
             # If fromTimestamp is provided, try different formats
             if 'fromTimestamp' in kwargs:
@@ -130,7 +146,32 @@ class LangFuseTraceAnalyzer:
             st.error(f"Error fetching traces: {str(e)}")
             return None
 
+    def _get_observation_cost_usage(self, observation_item):
+        obs_trace = observation_item.get('traceId')
+        calc_inp = observation_item.get('calculatedInputCost')
+        out_dict = {'id': observation_item.get('id'), 'trace_id': observation_item.get('traceId'), 'name': observation_item.get('name'),}
+        usage_keys = {'costDetails': ['input','output', 'total'], 'usageDetails': ['input','output', 'total']}
+        for metric_type, metric_list in usage_keys.items():
+            if metric_type not in out_dict:
+                out_dict[metric_type] = {}
+            metric_val = None
+            if metric_type not in observation_item:
+                continue
+            for metric in metric_list:
+                try:
+                    metric_val = float(observation_item[metric_type].get(metric, None))
+                except TypeError:
+                    
+                    metric_val = 0
+                    print (f"CI {calc_inp}## METRIC {metric_type} {metric} ### {observation_item[metric_type]} ### METRIC_VAL {metric_val}")
+                    print(out_dict)
+                out_dict[metric_type][metric] = metric_val
+
+        return out_dict
+
+
     def get_traces_list_all(self, **kwargs):
+        self._clear_local()
         full_list = []
         response_base = self._get_traces_list(**kwargs)
         
@@ -229,23 +270,175 @@ class LangFuseTraceAnalyzer:
             self.fields_counters['suggestion'][input_arg['f_name']] += 1
             suggestion_dict = {
                 'field_name': input_arg['f_name'],
+
                 'raw_value': input_arg['f_value'],
                 'suggestion': output_arg['suggestion'],
                 'trace_id': trace_item['id']
             }
             self.suggestions.append(suggestion_dict)
 
+
+    def _check_important_info_validate_field(self, trace_item):
+        input_arg = self._get_input_arg(trace_item)
+        output_arg = self._get_output_arg(trace_item)
+
+#        if field_traces = trace_important_data_by_group['validate-field'].get(input_arg['f_name'], None) is None:
+#            trace_important_data_by_group['validate-field'] = []
+        info_dict = {'trace_id': trace_item['id'], 'field_name':input_arg['f_name'], 'field_value':input_arg['f_value']}        
+        self.trace_important_data_by_group['validate-field'].append(info_dict)
+#        self.trace_important_data_by_group['validate-field'][trace_item['id']] = info_dict
+        
+
+
+
+    def _check_usage3(self):
+        print('CHECK USAGE 3')
+
+        
+        
+        obs_response = requests.get(
+                f"{self.langfuse_credentials['LANGFUSE_HOST']}/api/public/observations",
+                params={
+                  "limit": "50",
+                "type": "GENERATION"
+                },
+                auth=HTTPBasicAuth(
+                                            self.langfuse_credentials['LANGFUSE_PUBLIC_KEY'], 
+                                            self.langfuse_credentials['LANGFUSE_SECRET_KEY']
+            ))
+        obs_data = obs_response.json()
+        obs_data_clean = [o for o in obs_data['data'] if o['traceId'] in self.trace_names.keys()]
+        for o in obs_data_clean:
+#        for o in obs_data['data']:
+            print(f"obs_id {o['id']}, obs_trace {o['traceId']}")
+            obs_usage = self._get_observation_cost_usage(o)
+            self.usage_data.append(obs_usage)
+            if not self.usage_data_traces.get(obs_usage['trace_id'], None):
+                self.usage_data_traces[obs_usage['trace_id']] = []
+            self.usage_data_traces[obs_usage['trace_id']].append({'o_id':o['id'],'usage_cost':obs_usage})
+            
+
+
+
+
+
+    def summarize_usage_data(self):
+        """
+        Summarizes costs and usage from all observations grouped by trace_id.
+        
+        Aggregates data from self.usage_data_traces and stores the result in 
+        self.usage_data_summarized with schema:
+        {
+            trace_id: {
+                'costDetails': {'input': float, 'output': float, 'total': float},
+                'usageDetails': {'input': int, 'output': int, 'total': int}
+            }
+        }
+        """
+        self.usage_data_summarized = {}
+        self.usage_data_summarized2 = []
+        # Iterate through all trace_ids in the source data
+        for trace_id, observations in self.usage_data_traces.items():
+            trace_obs_number = 0
+            trace_name = self.trace_names[trace_id]
+            # Initialize aggregated values for this trace
+            total_cost_input = 0.0
+            total_cost_output = 0.0
+            total_cost_total = 0.0
+            
+            total_usage_input = 0
+            total_usage_output = 0
+            total_usage_total = 0
+            
+            # Iterate through all observations for this trace
+            for observation in observations:
+                usage_cost = observation.get('usage_cost', {})
+                trace_obs_number += 1
+                
+                # Aggregate cost details
+                cost_details = usage_cost.get('costDetails', {})
+                total_cost_input += cost_details.get('input', 0.0)
+                total_cost_output += cost_details.get('output', 0.0)
+                total_cost_total += cost_details.get('total', 0.0)
+                
+                # Aggregate usage details
+                usage_details = usage_cost.get('usageDetails', {})
+                total_usage_input += usage_details.get('input', 0)
+                total_usage_output += usage_details.get('output', 0)
+                total_usage_total += usage_details.get('total', 0)
+            
+            # Store summarized data for this trace
+#                self.usage_data_summarized[trace_id] = {
+            self.usage_data_summarized[trace_id] = {
+                'observations_count': trace_obs_number, 'trace_name': trace_name,
+                'costDetails_input': total_cost_input,
+                'costDetails_output': total_cost_output,
+                'costDetails_total': total_cost_total,
+                
+            
+                    'usageDetails_input': total_usage_input,
+                    'usageDetails_output': total_usage_output,
+                    'usageDetails_total': total_usage_total
+                }
+            self.usage_data_summarized2.append({
+                'observations_count': trace_obs_number, 'trace_name': trace_name, 'trace_id':trace_id, 
+                'costDetails_input': total_cost_input,
+                'costDetails_output': total_cost_output,
+                'costDetails_total': total_cost_total,
+                
+            
+                    'usageDetails_input': total_usage_input,
+                    'usageDetails_output': total_usage_output,
+                    'usageDetails_total': total_usage_total
+                })            
+
+
+
+
+#            self.usage_data_summarized[trace_id] = {
+#                'observations_count': trace_obs_number, 'trace_name': trace_name,
+#                'costDetails': {
+#                    'input': total_cost_input,
+#                    'output': total_cost_output,
+#                    'total': total_cost_total
+#                },
+#                'usageDetails': {
+#                    'input': total_usage_input,
+#                    'output': total_usage_output,
+#                    'total': total_usage_total
+#                }
+#            }
+        
+#        return self.usage_data_summarized
+
+
+
+
     def analyze_traces(self, traces_list):
         """Analyze all traces and count names"""
+
+        self._clear_local()
+
+        #TMP Add group
+        self.trace_important_data_by_group['validate-field'] = []
+
         for trace in traces_list:
+            self.trace_important_data_by_group['validate-field'].append({'trace_id':trace.get('id', 'no_trace_id')})
+
+            self.trace_names.update({trace.get('id', 'no_trace_id'):trace.get('name', 'unnamed')})
             trace_name = trace.get('name', 'unnamed')
-            self.trace_names[trace_name] += 1
+            self.trace_names_counters[trace_name] += 1
             
             # Only detailed analysis for 'validate-field' traces
             if trace_name == 'validate-field':
                 self._check_basics(trace)
                 self._check_suggestions(trace)
                 self._check_warnings(trace)
+#                self._check_usage(trace)
+                self._check_important_info_validate_field(trace)
+        self._check_usage3()
+        self.summarize_usage_data()
+#        self._summarize_observations_traces()
 
 
 def create_sidebar():
@@ -350,44 +543,12 @@ LANGFUSE_HOST=https://cloud.langfuse.com""")
         st.sidebar.success("✅ .env file found")
     else:
         st.sidebar.info("ℹ️ No .env file found")
-    
+#    self.usage_data_summarized
     # Date range filter section
     st.sidebar.write("---")
     st.sidebar.write("**📅 Data Filter Options**")
-    
-#    # Option to filter by recent days
-#    use_date_filter = st.sidebar.checkbox("Filter by recent days", value=False)
-#    
-#    recent_days = None
-#    if use_date_filter:
-#        filter_type = st.sidebar.radio(
-#            "Select filter method:",
-#            ["Slider (1-30 days)", "Text input (any number)"],
-#            index=0
-#        )
-#        
-#        if filter_type == "Slider (1-30 days)":
-#            recent_days = st.sidebar.slider(
-#                "Number of recent days:",
-#                min_value=1,
-#                max_value=30,
-#                value=7,
-#                help="Fetch data from the last N days"
-#            )
-#        else:
-#            recent_days = st.sidebar.number_input(
-#                "Number of recent days:",
-#                min_value=1,
-#                value=7,
-#                help="Enter any number of recent days"
-#            )
-#        
-#        # Show the calculated date range
-#        if recent_days:
-#            from_date = datetime.now() - timedelta(days=recent_days)
-#            st.sidebar.info(f"📊 Fetching data from: {from_date.strftime('%Y-%m-%d')} to today")
-#    else:
-#        st.sidebar.info("📊 Fetching all available data")
+
+
     
     return public_key, secret_key, host, recent_days
 
@@ -426,10 +587,10 @@ def create_charts(analyzer):
     with col2:
         st.subheader("📊 Trace Names Distribution")
         
-        if analyzer.trace_names:
+        if analyzer.trace_names_counters:
             names_df = pd.DataFrame([
                 {'Trace Name': name, 'Count': count} 
-                for name, count in analyzer.trace_names.most_common()
+                for name, count in analyzer.trace_names_counters.most_common()
             ])
             
             fig_pie = px.pie(names_df, values='Count', names='Trace Name', 
@@ -509,6 +670,7 @@ def main():
         
         # Analyze traces
         with st.spinner("Analyzing traces..."):
+            analyzer._clear_local()
             analyzer.analyze_traces(all_traces)
         
         # Display results
@@ -519,9 +681,9 @@ def main():
         with col1:
             st.metric("Total Traces", len(all_traces))
         with col2:
-            st.metric("Unique Trace Names", len(analyzer.trace_names))
+            st.metric("Unique Trace Names", len(analyzer.trace_names_counters))
         with col3:
-            validate_field_count = analyzer.trace_names.get('validate-field', 0)
+            validate_field_count = analyzer.trace_names_counters.get('validate-field', 0)
             st.metric("'validate-field' Traces", validate_field_count)
         
         # Charts
@@ -529,10 +691,10 @@ def main():
         
         # Trace Names Table
         st.subheader("📝 Trace Names Summary")
-        if analyzer.trace_names:
+        if analyzer.trace_names_counters:
             names_df = pd.DataFrame([
                 {'Trace Name': name, 'Count': count, 'Percentage': f"{(count/len(all_traces)*100):.1f}%"} 
-                for name, count in analyzer.trace_names.most_common()
+                for name, count in analyzer.trace_names_counters.most_common()
             ])
             st.dataframe(names_df, use_container_width=True)
         
@@ -568,9 +730,47 @@ def main():
                 mime="text/csv"
             )
         else:
+#            self.usage_data_summarized()
             st.info("No warnings found in the analyzed traces.")
-            
+        #DEBUG INFO
+#        st.subheader("⚠️ names")
+#        st.write(analyzer.trace_names)
+#        st.subheader("⚠️ Usage")
+#        st.write(analyzer.usage_data)
+#        st.subheader("⚠️ Usafge Trace")
+#        st.write(analyzer.usage_data_traces)
+#        st.subheader("⚠️ Usage Trace Summ")
+#        st.write(analyzer.usage_data_summarized)
+#        st.subheader("⚠️ Usage Trace Summ2")
+        st.subheader("📊 Validate Field Use/Cost")
+        with st.expander("Validate-Field: Raw Cost/Usage Per Trace"):
+#        st.subheader("⚠️ Raw Cost/Usage Per Trace")
+            sdf = pd.DataFrame(analyzer.usage_data_summarized)
+            sdf2 = pd.DataFrame(analyzer.usage_data_summarized2)
+#        st.write(analyzer.usage_data_summarized)
+            st.write(sdf)
+#        st.write(analyzer.usage_data_summarized2)
+            st.write(sdf2)
+        
+        imp_data_vf = [f for f in analyzer.trace_important_data_by_group['validate-field'] if 'field_name' in f]
+
+        imp_df1 = pd.DataFrame(analyzer.trace_important_data_by_group)
+        imp_df2 = pd.DataFrame(imp_data_vf)
+        if analyzer.trace_names_counters.get('validate-field', 0) > 0:
+            with st.expander("Validate-Field: Fields Values"):
+    #            st.write(imp_df1)
+                st.write(imp_df2)
+            join_df = imp_df2.merge(sdf2, on='trace_id', how='inner')
+            with st.expander("Validate-Field: Join Data and Cost"):
+                st.subheader("Calculation per field (Cost)")
+                st.write(join_df.groupby('field_name', as_index=False)[['costDetails_input', 'costDetails_output', 'costDetails_total',]].agg(['min','max', 'mean']))
+                st.subheader("Calculation per field (Usage)")
+                st.write(join_df.groupby('field_name', as_index=False)[['usageDetails_input', 'usageDetails_output', 'usageDetails_total']].agg(['min','max', 'mean']))
+                st.subheader("Raw Join")
+                st.write(join_df)
+                
     except Exception as e:
+        raise e
         st.error(f"❌ An error occurred: {str(e)}")
         st.write("Please check your credentials and try again.")
 
