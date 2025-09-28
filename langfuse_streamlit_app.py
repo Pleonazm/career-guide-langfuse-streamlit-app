@@ -1212,6 +1212,7 @@ def main():
                 'carrier_goal_step': 'Carrier Goals',
                 'skill_step': 'Skills',
                 'experience_step': 'Experience',
+                'education_step': 'Education',
                 'courses_step': 'Courses',
                 'projects_step': 'Projects',
                 'interests_step': 'Interests',
