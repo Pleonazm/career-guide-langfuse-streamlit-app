@@ -440,6 +440,7 @@ class LangFuseTraceAnalyzer:
         self.summarize_usage_data()
 #        self._summarize_observations_traces()
 
+##############################################STREAMLIT##########################
 
 def create_sidebar():
     """Create sidebar for credential override"""
@@ -553,65 +554,315 @@ LANGFUSE_HOST=https://cloud.langfuse.com""")
     return public_key, secret_key, host, recent_days
 
 
+def create_validate_field_charts(analyzer):
+    """Create charts specifically for validate-field analysis"""
+    st.subheader("📈 Field Analysis Overview (only 'validate-field' traces!!!)")
+    
+    # Prepare data for stacked bar chart
+    fields = list(analyzer.fields_counters['total'].keys())
+    if fields:
+        chart_data = {
+            'Field': fields,
+            'Total': [analyzer.fields_counters['total'][f] for f in fields],
+            'Valid': [analyzer.fields_counters['valid'][f] for f in fields],
+            'Empty': [analyzer.fields_counters['empty'][f] for f in fields],
+            'Suggestions': [analyzer.fields_counters['suggestion'][f] for f in fields],
+            'Warnings': [analyzer.fields_counters['warning'][f] for f in fields]
+        }
+        df_chart = pd.DataFrame(chart_data)
+        fig = go.Figure()
+        fig.add_trace(go.Bar(name='Valid', x=df_chart['Field'], y=df_chart['Valid'], marker_color='green'))
+        fig.add_trace(go.Bar(name='Empty', x=df_chart['Field'], y=df_chart['Empty'], marker_color='lightgray'))
+        fig.add_trace(go.Bar(name='Suggestions', x=df_chart['Field'], y=df_chart['Suggestions'], marker_color='orange'))
+        fig.add_trace(go.Bar(name='Warnings', x=df_chart['Field'], y=df_chart['Warnings'], marker_color='red'))
+        fig.update_layout(barmode='stack', title='Field Validation Results')
+        st.plotly_chart(fig, use_container_width=True)
+
+
+def create_trace_names_distribution_chart(analyzer):
+    """Create trace names distribution pie chart"""
+    st.subheader("📊 Trace Names Distribution")
+    
+    if analyzer.trace_names_counters:
+        names_df = pd.DataFrame([
+            {'Trace Name': name, 'Count': count}
+            for name, count in analyzer.trace_names_counters.most_common()
+        ])
+        fig_pie = px.pie(names_df, values='Count', names='Trace Name',
+                        title='Distribution of Trace Names')
+        st.plotly_chart(fig_pie, use_container_width=True)
+
+
 def create_charts(analyzer):
     """Create visualization charts"""
     col1, col2 = st.columns(2)
     
     with col1:
-        st.subheader("📈 Field Analysis Overview (only 'validate-field' traces!!!)")
-        
-        # Prepare data for stacked bar chart
-        fields = list(analyzer.fields_counters['total'].keys())
-        if fields:
-            chart_data = {
-                'Field': fields,
-                'Total': [analyzer.fields_counters['total'][f] for f in fields],
-                'Valid': [analyzer.fields_counters['valid'][f] for f in fields],
-                'Empty': [analyzer.fields_counters['empty'][f] for f in fields],
-                'Suggestions': [analyzer.fields_counters['suggestion'][f] for f in fields],
-                'Warnings': [analyzer.fields_counters['warning'][f] for f in fields]
-            }
-            
-            df_chart = pd.DataFrame(chart_data)
-            
-            fig = go.Figure()
-            
-            fig.add_trace(go.Bar(name='Valid', x=df_chart['Field'], y=df_chart['Valid'], marker_color='green'))
-            fig.add_trace(go.Bar(name='Empty', x=df_chart['Field'], y=df_chart['Empty'], marker_color='lightgray'))
-            fig.add_trace(go.Bar(name='Suggestions', x=df_chart['Field'], y=df_chart['Suggestions'], marker_color='orange'))
-            fig.add_trace(go.Bar(name='Warnings', x=df_chart['Field'], y=df_chart['Warnings'], marker_color='red'))
-            
-            fig.update_layout(barmode='stack', title='Field Validation Results')
-            st.plotly_chart(fig, use_container_width=True)
+        create_validate_field_charts(analyzer)
     
     with col2:
-        st.subheader("📊 Trace Names Distribution")
+        create_trace_names_distribution_chart(analyzer)
+
+
+# def create_charts(analyzer):
+#     """Create visualization charts"""
+#     col1, col2 = st.columns(2)
+    
+#     with col1:
+#         st.subheader("📈 Field Analysis Overview (only 'validate-field' traces!!!)")
         
-        if analyzer.trace_names_counters:
-            names_df = pd.DataFrame([
-                {'Trace Name': name, 'Count': count} 
-                for name, count in analyzer.trace_names_counters.most_common()
-            ])
+#         # Prepare data for stacked bar chart
+#         fields = list(analyzer.fields_counters['total'].keys())
+#         if fields:
+#             chart_data = {
+#                 'Field': fields,
+#                 'Total': [analyzer.fields_counters['total'][f] for f in fields],
+#                 'Valid': [analyzer.fields_counters['valid'][f] for f in fields],
+#                 'Empty': [analyzer.fields_counters['empty'][f] for f in fields],
+#                 'Suggestions': [analyzer.fields_counters['suggestion'][f] for f in fields],
+#                 'Warnings': [analyzer.fields_counters['warning'][f] for f in fields]
+#             }
             
-            fig_pie = px.pie(names_df, values='Count', names='Trace Name', 
-                           title='Distribution of Trace Names')
-            st.plotly_chart(fig_pie, use_container_width=True)
+#             df_chart = pd.DataFrame(chart_data)
+            
+#             fig = go.Figure()
+            
+#             fig.add_trace(go.Bar(name='Valid', x=df_chart['Field'], y=df_chart['Valid'], marker_color='green'))
+#             fig.add_trace(go.Bar(name='Empty', x=df_chart['Field'], y=df_chart['Empty'], marker_color='lightgray'))
+#             fig.add_trace(go.Bar(name='Suggestions', x=df_chart['Field'], y=df_chart['Suggestions'], marker_color='orange'))
+#             fig.add_trace(go.Bar(name='Warnings', x=df_chart['Field'], y=df_chart['Warnings'], marker_color='red'))
+            
+#             fig.update_layout(barmode='stack', title='Field Validation Results')
+#             st.plotly_chart(fig, use_container_width=True)
+    
+#     with col2:
+#         st.subheader("📊 Trace Names Distribution")
+        
+#         if analyzer.trace_names_counters:
+#             names_df = pd.DataFrame([
+#                 {'Trace Name': name, 'Count': count} 
+#                 for name, count in analyzer.trace_names_counters.most_common()
+#             ])
+            
+#             fig_pie = px.pie(names_df, values='Count', names='Trace Name', 
+#                            title='Distribution of Trace Names')
+#             st.plotly_chart(fig_pie, use_container_width=True)
+
+# def create_page_header():
+#     # Page header
+#     st.title("📊 LangFuse Trace Analyzer Dashboard")
+#     st.markdown("---")
 
 
-def main():
+# def create_general_tab():
+#     pass
+
+# def create_field_validation_tab():
+#     pass
+
+# def create_profile_sections_tab():
+#     pass
+
+
+# def main():
+#     # # Page header
+#     # st.title("📊 LangFuse Trace Analyzer Dashboard")
+#     # st.markdown("---")
+
+#     create_page_header()
+    
+#     # Sidebar
+#     public_key_override, secret_key_override, host_override, recent_days = create_sidebar()
+
+#     tab_general_info, tab_field_validation, tab_profile_sections = st.tabs(['General', 'Field Validation', 'Profile'])
+    
+#     # Determine which credentials to use
+#     use_override = any([public_key_override, secret_key_override, host_override])
+        
+#     if use_override and not all([public_key_override, secret_key_override, host_override]):
+#         st.warning("⚠️ If overriding credentials, please provide all three fields (Public Key, Secret Key, Host)")
+#         return
+    
+#     # Initialize analyzer
+#     if use_override:
+#         analyzer = LangFuseTraceAnalyzer(
+#             public_key=public_key_override,
+#             secret_key=secret_key_override, 
+#             host=host_override
+#         )
+#     else:
+#         analyzer = LangFuseTraceAnalyzer()
+    
+#     # Check if credentials are available
+#     missing_creds = not all(analyzer.langfuse_credentials.values())
+    
+    
+#     if missing_creds:
+#         st.error("❌ Missing LangFuse credentials. Please provide them via:")
+#         st.write("1. **Environment variables** in `.env` file (same directory as script)")
+#         st.write("2. **Streamlit secrets** (recommended for deployment)")
+#         st.write("3. **Sidebar form** (fill out the fields in the sidebar)")
+#         st.write("")
+#         st.info("💡 If you have a `.env` file, make sure it's in the same directory as this script and contains the variables shown in the sidebar.")
+        
+#         # Still show the interface but with a warning
+#         if not use_override:
+#             st.warning("⚠️ Please provide credentials using the sidebar form to proceed.")
+#             return
+#     else:
+#         st.success("✅ All LangFuse credentials found!")
+    
+#     # Fetch and analyze data
+#     if recent_days:
+#         st.info(f"🔄 Fetching traces from the last {recent_days} days...")
+#     else:
+#         st.info("🔄 Fetching all available traces from LangFuse...")
+    
+#     try:
+        
+#         with st.spinner("Loading traces..."):
+#             # Prepare API parameters for date filtering
+#             api_params = {}
+#             if recent_days:
+#                 # Calculate the from_timestamp for the API
+#                 from_datetime = datetime.now() - timedelta(days=recent_days)
+#                 # Start with the most common ISO format
+#                 api_params['fromTimestamp'] = from_datetime.strftime('%Y-%m-%dT%H:%M:%S.%fZ')
+            
+#             all_traces = analyzer.get_traces_list_all(**api_params)
+            
+#         if not all_traces:
+#             st.warning("No traces found or error occurred while fetching data.")
+#             if recent_days:
+#                 st.info(f"💡 Try increasing the number of days (currently set to {recent_days}) or disable date filtering to see all data.")
+#             return
+            
+#         date_info = f" from the last {recent_days} days" if recent_days else ""
+#         st.success(f"✅ Loaded {len(all_traces)} traces{date_info} successfully!")
+        
+#         # Analyze traces
+#         with st.spinner("Analyzing traces..."):
+#             analyzer._clear_local()
+#             analyzer.analyze_traces(all_traces)
+            
+#         # Display results
+#         st.markdown("## 📋 Analysis Results")
+        
+#         # Trace names summary
+#         col1, col2, col3 = st.columns(3)
+#         with col1:
+#             st.metric("Total Traces", len(all_traces))
+#         with col2:
+#             st.metric("Unique Trace Names", len(analyzer.trace_names_counters))
+#         with col3:
+#             validate_field_count = analyzer.trace_names_counters.get('validate-field', 0)
+#             st.metric("'validate-field' Traces", validate_field_count)
+        
+#         # Charts
+#         create_charts(analyzer)
+        
+#         # Trace Names Table
+#         st.subheader("📝 Trace Names Summary")
+#         if analyzer.trace_names_counters:
+#             names_df = pd.DataFrame([
+#                 {'Trace Name': name, 'Count': count, 'Percentage': f"{(count/len(all_traces)*100):.1f}%"} 
+#                 for name, count in analyzer.trace_names_counters.most_common()
+#             ])
+#             st.dataframe(names_df, use_container_width=True)
+        
+#         # Suggestions Table
+#         st.subheader("💡 Suggestions")
+#         if analyzer.suggestions:
+#             suggestions_df = pd.DataFrame(analyzer.suggestions)
+#             st.dataframe(suggestions_df, use_container_width=True)
+            
+#             # Download button for suggestions
+#             csv_suggestions = suggestions_df.to_csv(index=False)
+#             st.download_button(
+#                 label="📥 Download Suggestions as CSV",
+#                 data=csv_suggestions,
+#                 file_name="langfuse_suggestions.csv",
+#                 mime="text/csv"
+#             )
+#         else:
+#             st.info("No suggestions found in the analyzed traces.")
+        
+#         # Warnings Table
+#         st.subheader("⚠️ Warnings")
+#         if analyzer.warnings:
+#             warnings_df = pd.DataFrame(analyzer.warnings)
+#             st.dataframe(warnings_df, use_container_width=True)
+            
+#             # Download button for warnings
+#             csv_warnings = warnings_df.to_csv(index=False)
+#             st.download_button(
+#                 label="📥 Download Warnings as CSV",
+#                 data=csv_warnings,
+#                 file_name="langfuse_warnings.csv",
+#                 mime="text/csv"
+#             )
+#         else:
+# #            self.usage_data_summarized()
+#             st.info("No warnings found in the analyzed traces.")
+#         #DEBUG INFO
+# #        st.subheader("⚠️ names")
+# #        st.write(analyzer.trace_names)
+# #        st.subheader("⚠️ Usage")
+# #        st.write(analyzer.usage_data)
+# #        st.subheader("⚠️ Usafge Trace")
+# #        st.write(analyzer.usage_data_traces)
+# #        st.subheader("⚠️ Usage Trace Summ")
+# #        st.write(analyzer.usage_data_summarized)
+# #        st.subheader("⚠️ Usage Trace Summ2")
+#         st.subheader("📊 Validate Field Use/Cost")
+#         with st.expander("Validate-Field: Raw Cost/Usage Per Trace"):
+# #        st.subheader("⚠️ Raw Cost/Usage Per Trace")
+#             sdf = pd.DataFrame(analyzer.usage_data_summarized)
+#             sdf2 = pd.DataFrame(analyzer.usage_data_summarized2)
+# #        st.write(analyzer.usage_data_summarized)
+#             st.write(sdf)
+# #        st.write(analyzer.usage_data_summarized2)
+#             st.write(sdf2)
+        
+#         imp_data_vf = [f for f in analyzer.trace_important_data_by_group['validate-field'] if 'field_name' in f]
+
+#         imp_df1 = pd.DataFrame(analyzer.trace_important_data_by_group)
+#         imp_df2 = pd.DataFrame(imp_data_vf)
+#         if analyzer.trace_names_counters.get('validate-field', 0) > 0:
+#             with st.expander("Validate-Field: Fields Values"):
+#     #            st.write(imp_df1)
+#                 st.write(imp_df2)
+#             join_df = imp_df2.merge(sdf2, on='trace_id', how='inner')
+#             with st.expander("Validate-Field: Join Data and Cost"):
+#                 st.subheader("Calculation per field (Cost)")
+#                 st.write(join_df.groupby('field_name', as_index=False)[['costDetails_input', 'costDetails_output', 'costDetails_total',]].agg(['min','max', 'mean']))
+#                 st.subheader("Calculation per field (Usage)")
+#                 st.write(join_df.groupby('field_name', as_index=False)[['usageDetails_input', 'usageDetails_output', 'usageDetails_total']].agg(['min','max', 'mean']))
+#                 st.subheader("Raw Join")
+#                 st.write(join_df)
+                
+#     except Exception as e:
+#         raise e
+#         st.error(f"❌ An error occurred: {str(e)}")
+#         st.write("Please check your credentials and try again.")
+
+# if __name__ == "__main__":
+#     main()
+
+def create_page_header():
     # Page header
     st.title("📊 LangFuse Trace Analyzer Dashboard")
     st.markdown("---")
-    
-    # Sidebar
-    public_key_override, secret_key_override, host_override, recent_days = create_sidebar()
-    
+
+
+def validate_and_initialize_credentials(public_key_override, secret_key_override, host_override):
+    """Validate credentials and initialize analyzer"""
     # Determine which credentials to use
     use_override = any([public_key_override, secret_key_override, host_override])
-    
+        
     if use_override and not all([public_key_override, secret_key_override, host_override]):
         st.warning("⚠️ If overriding credentials, please provide all three fields (Public Key, Secret Key, Host)")
-        return
+        return None, False
     
     # Initialize analyzer
     if use_override:
@@ -637,142 +888,230 @@ def main():
         # Still show the interface but with a warning
         if not use_override:
             st.warning("⚠️ Please provide credentials using the sidebar form to proceed.")
-            return
+            return None, False
     else:
         st.success("✅ All LangFuse credentials found!")
     
-    # Fetch and analyze data
+    return analyzer, True
+
+
+def fetch_traces_data(analyzer, recent_days):
+    """Fetch traces data from LangFuse"""
+    # Display loading message
     if recent_days:
         st.info(f"🔄 Fetching traces from the last {recent_days} days...")
     else:
         st.info("🔄 Fetching all available traces from LangFuse...")
     
+    with st.spinner("Loading traces..."):
+        # Prepare API parameters for date filtering
+        api_params = {}
+        if recent_days:
+            # Calculate the from_timestamp for the API
+            from_datetime = datetime.now() - timedelta(days=recent_days)
+            # Start with the most common ISO format
+            api_params['fromTimestamp'] = from_datetime.strftime('%Y-%m-%dT%H:%M:%S.%fZ')
+        
+        all_traces = analyzer.get_traces_list_all(**api_params)
+        
+    if not all_traces:
+        st.warning("No traces found or error occurred while fetching data.")
+        if recent_days:
+            st.info(f"💡 Try increasing the number of days (currently set to {recent_days}) or disable date filtering to see all data.")
+        return None
+        
+    date_info = f" from the last {recent_days} days" if recent_days else ""
+    st.success(f"✅ Loaded {len(all_traces)} traces{date_info} successfully!")
+    
+    return all_traces
+
+
+def analyze_traces_data(analyzer, all_traces):
+    """Analyze the fetched traces"""
+    with st.spinner("Analyzing traces..."):
+        analyzer._clear_local()
+        analyzer.analyze_traces(all_traces)
+
+
+def display_metrics_summary(analyzer, all_traces):
+    """Display summary metrics"""
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.metric("Total Traces", len(all_traces))
+    with col2:
+        st.metric("Unique Trace Names", len(analyzer.trace_names_counters))
+    # with col3:
+    #     validate_field_count = analyzer.trace_names_counters.get('validate-field', 0)
+    #     st.metric("'validate-field' Traces", validate_field_count)
+
+
+def display_trace_names_table(analyzer, all_traces):
+    """Display trace names summary table"""
+    st.subheader("📝 Trace Names Summary")
+    if analyzer.trace_names_counters:
+        names_df = pd.DataFrame([
+            {'Trace Name': name, 'Count': count, 'Percentage': f"{(count/len(all_traces)*100):.1f}%"} 
+            for name, count in analyzer.trace_names_counters.most_common()
+        ])
+        st.dataframe(names_df, use_container_width=True)
+
+
+def display_suggestions_table(analyzer):
+    """Display suggestions table with download option"""
+    st.subheader("💡 Suggestions")
+    if analyzer.suggestions:
+        suggestions_df = pd.DataFrame(analyzer.suggestions)
+        st.dataframe(suggestions_df, use_container_width=True)
+        
+        # Download button for suggestions
+        csv_suggestions = suggestions_df.to_csv(index=False)
+        st.download_button(
+            label="📥 Download Suggestions as CSV",
+            data=csv_suggestions,
+            file_name="langfuse_suggestions.csv",
+            mime="text/csv"
+        )
+    else:
+        st.info("No suggestions found in the analyzed traces.")
+
+
+def display_warnings_table(analyzer):
+    """Display warnings table with download option"""
+    st.subheader("⚠️ Warnings")
+    if analyzer.warnings:
+        warnings_df = pd.DataFrame(analyzer.warnings)
+        st.dataframe(warnings_df, use_container_width=True)
+        
+        # Download button for warnings
+        csv_warnings = warnings_df.to_csv(index=False)
+        st.download_button(
+            label="📥 Download Warnings as CSV",
+            data=csv_warnings,
+            file_name="langfuse_warnings.csv",
+            mime="text/csv"
+        )
+    else:
+        st.info("No warnings found in the analyzed traces.")
+
+
+def display_validate_field_analysis(analyzer):
+    """Display validate-field specific analysis"""
+    st.subheader("📊 Validate Field Use/Cost")
+    
+    # Raw cost/usage per trace
+    with st.expander("Validate-Field: Raw Cost/Usage Per Trace"):
+        sdf = pd.DataFrame(analyzer.usage_data_summarized)
+        sdf2 = pd.DataFrame(analyzer.usage_data_summarized2)
+        st.write(sdf)
+        st.write(sdf2)
+    
+    # Field values analysis
+    imp_data_vf = [f for f in analyzer.trace_important_data_by_group['validate-field'] if 'field_name' in f]
+    imp_df2 = pd.DataFrame(imp_data_vf)
+    
+    if analyzer.trace_names_counters.get('validate-field', 0) > 0:
+        with st.expander("Validate-Field: Fields Values"):
+            st.write(imp_df2)
+        
+        # Join data and cost analysis
+        join_df = imp_df2.merge(sdf2, on='trace_id', how='inner')
+        with st.expander("Validate-Field: Join Data and Cost"):
+            st.subheader("Calculation per field (Cost)")
+            st.write(join_df.groupby('field_name', as_index=False)[['costDetails_input', 'costDetails_output', 'costDetails_total']].agg(['min','max', 'mean']))
+            st.subheader("Calculation per field (Usage)")
+            st.write(join_df.groupby('field_name', as_index=False)[['usageDetails_input', 'usageDetails_output', 'usageDetails_total']].agg(['min','max', 'mean']))
+            st.subheader("Raw Join")
+            st.write(join_df)
+
+            ##TMP
+            p1fields = ['first_name', 'last_name']
+            df_copy = join_df.copy()
+            df_prof1 = df_copy[df_copy['field_name'].isin(p1fields)]
+            st.write(df_prof1)
+
+
+def display_analysis_results_general(analyzer, all_traces):
+    """Display all analysis results"""
+    st.markdown("## 📋 Analysis Results")
+    
+    # Metrics summary
+    display_metrics_summary(analyzer, all_traces)
+    
+    # Charts
+    # create_charts(analyzer)
+    create_trace_names_distribution_chart(analyzer)
+    
+    # Trace Names Table
+    display_trace_names_table(analyzer, all_traces)
+    
+    # # Suggestions Table
+    # display_suggestions_table(analyzer)
+    
+    # # Warnings Table
+    # display_warnings_table(analyzer)
+    
+    # # Validate Field Analysis
+    # display_validate_field_analysis(analyzer)
+
+def display_analysis_result_validate_field(analyzer, all_traces):
+
+    # st.markdown('## Trace Validate-Field')
+    # st.write('Used by Profile Wizard when validating each form field')
+
+    # Suggestions Table
+    display_suggestions_table(analyzer)
+    
+    # Warnings Table
+    display_warnings_table(analyzer)
+    
+    # Validate Field Analysis
+    display_validate_field_analysis(analyzer)
+
+
+def main():
+    # Page header
+    create_page_header()
+    
+    
+    
+    # Sidebar
+    public_key_override, secret_key_override, host_override, recent_days = create_sidebar()
+
+    # Wrap the main data processing in try/except as in original code
     try:
-        with st.spinner("Loading traces..."):
-            # Prepare API parameters for date filtering
-            api_params = {}
-            if recent_days:
-                # Calculate the from_timestamp for the API
-                from_datetime = datetime.now() - timedelta(days=recent_days)
-                # Start with the most common ISO format
-                api_params['fromTimestamp'] = from_datetime.strftime('%Y-%m-%dT%H:%M:%S.%fZ')
+        with st.expander('Basic Diagnostic Info'):
+            # Validate credentials and initialize analyzer
+            analyzer, credentials_valid = validate_and_initialize_credentials(
+                public_key_override, secret_key_override, host_override
+            )
             
-            all_traces = analyzer.get_traces_list_all(**api_params)
+            if not credentials_valid:
+                return
             
-        if not all_traces:
-            st.warning("No traces found or error occurred while fetching data.")
-            if recent_days:
-                st.info(f"💡 Try increasing the number of days (currently set to {recent_days}) or disable date filtering to see all data.")
-            return
-            
-        date_info = f" from the last {recent_days} days" if recent_days else ""
-        st.success(f"✅ Loaded {len(all_traces)} traces{date_info} successfully!")
+    
+    
+            # Fetch traces data
+            all_traces = fetch_traces_data(analyzer, recent_days)
+            if not all_traces:
+                return
         
         # Analyze traces
-        with st.spinner("Analyzing traces..."):
-            analyzer._clear_local()
-            analyzer.analyze_traces(all_traces)
-        
+        analyze_traces_data(analyzer, all_traces)
+        tab_general, tab_validate_fields = st.tabs(['General Info', 'Trace Validate-Field'])
         # Display results
-        st.markdown("## 📋 Analysis Results")
+        with tab_general:
+            display_analysis_results_general(analyzer, all_traces)
+        with tab_validate_fields:
+            st.markdown('## Trace Validate-Field')
+            st.write('Used by Profile Wizard when validating each form field')  
+            create_validate_field_charts(analyzer)
+            display_analysis_result_validate_field(analyzer, all_traces)
         
-        # Trace names summary
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            st.metric("Total Traces", len(all_traces))
-        with col2:
-            st.metric("Unique Trace Names", len(analyzer.trace_names_counters))
-        with col3:
-            validate_field_count = analyzer.trace_names_counters.get('validate-field', 0)
-            st.metric("'validate-field' Traces", validate_field_count)
-        
-        # Charts
-        create_charts(analyzer)
-        
-        # Trace Names Table
-        st.subheader("📝 Trace Names Summary")
-        if analyzer.trace_names_counters:
-            names_df = pd.DataFrame([
-                {'Trace Name': name, 'Count': count, 'Percentage': f"{(count/len(all_traces)*100):.1f}%"} 
-                for name, count in analyzer.trace_names_counters.most_common()
-            ])
-            st.dataframe(names_df, use_container_width=True)
-        
-        # Suggestions Table
-        st.subheader("💡 Suggestions")
-        if analyzer.suggestions:
-            suggestions_df = pd.DataFrame(analyzer.suggestions)
-            st.dataframe(suggestions_df, use_container_width=True)
-            
-            # Download button for suggestions
-            csv_suggestions = suggestions_df.to_csv(index=False)
-            st.download_button(
-                label="📥 Download Suggestions as CSV",
-                data=csv_suggestions,
-                file_name="langfuse_suggestions.csv",
-                mime="text/csv"
-            )
-        else:
-            st.info("No suggestions found in the analyzed traces.")
-        
-        # Warnings Table
-        st.subheader("⚠️ Warnings")
-        if analyzer.warnings:
-            warnings_df = pd.DataFrame(analyzer.warnings)
-            st.dataframe(warnings_df, use_container_width=True)
-            
-            # Download button for warnings
-            csv_warnings = warnings_df.to_csv(index=False)
-            st.download_button(
-                label="📥 Download Warnings as CSV",
-                data=csv_warnings,
-                file_name="langfuse_warnings.csv",
-                mime="text/csv"
-            )
-        else:
-#            self.usage_data_summarized()
-            st.info("No warnings found in the analyzed traces.")
-        #DEBUG INFO
-#        st.subheader("⚠️ names")
-#        st.write(analyzer.trace_names)
-#        st.subheader("⚠️ Usage")
-#        st.write(analyzer.usage_data)
-#        st.subheader("⚠️ Usafge Trace")
-#        st.write(analyzer.usage_data_traces)
-#        st.subheader("⚠️ Usage Trace Summ")
-#        st.write(analyzer.usage_data_summarized)
-#        st.subheader("⚠️ Usage Trace Summ2")
-        st.subheader("📊 Validate Field Use/Cost")
-        with st.expander("Validate-Field: Raw Cost/Usage Per Trace"):
-#        st.subheader("⚠️ Raw Cost/Usage Per Trace")
-            sdf = pd.DataFrame(analyzer.usage_data_summarized)
-            sdf2 = pd.DataFrame(analyzer.usage_data_summarized2)
-#        st.write(analyzer.usage_data_summarized)
-            st.write(sdf)
-#        st.write(analyzer.usage_data_summarized2)
-            st.write(sdf2)
-        
-        imp_data_vf = [f for f in analyzer.trace_important_data_by_group['validate-field'] if 'field_name' in f]
-
-        imp_df1 = pd.DataFrame(analyzer.trace_important_data_by_group)
-        imp_df2 = pd.DataFrame(imp_data_vf)
-        if analyzer.trace_names_counters.get('validate-field', 0) > 0:
-            with st.expander("Validate-Field: Fields Values"):
-    #            st.write(imp_df1)
-                st.write(imp_df2)
-            join_df = imp_df2.merge(sdf2, on='trace_id', how='inner')
-            with st.expander("Validate-Field: Join Data and Cost"):
-                st.subheader("Calculation per field (Cost)")
-                st.write(join_df.groupby('field_name', as_index=False)[['costDetails_input', 'costDetails_output', 'costDetails_total',]].agg(['min','max', 'mean']))
-                st.subheader("Calculation per field (Usage)")
-                st.write(join_df.groupby('field_name', as_index=False)[['usageDetails_input', 'usageDetails_output', 'usageDetails_total']].agg(['min','max', 'mean']))
-                st.subheader("Raw Join")
-                st.write(join_df)
-                
     except Exception as e:
         raise e
         st.error(f"❌ An error occurred: {str(e)}")
         st.write("Please check your credentials and try again.")
+
 
 if __name__ == "__main__":
     main()
