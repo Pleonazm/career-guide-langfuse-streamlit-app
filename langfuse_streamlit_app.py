@@ -21,6 +21,9 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
+if 'join_df' not in st.session_state:
+    st.session_state['join'] = None
+
 class LangFuseTraceAnalyzer:
     def __init__(self, public_key=None, secret_key=None, host=None):
         # Use provided keys or get from credentials
@@ -1015,6 +1018,7 @@ def display_validate_field_analysis(analyzer):
         
         # Join data and cost analysis
         join_df = imp_df2.merge(sdf2, on='trace_id', how='inner')
+        st.session_state['join_df'] = join_df
         with st.expander("Validate-Field: Join Data and Cost"):
             st.subheader("Calculation per field (Cost)")
             st.write(join_df.groupby('field_name', as_index=False)[['costDetails_input', 'costDetails_output', 'costDetails_total']].agg(['min','max', 'mean']))
@@ -1098,6 +1102,7 @@ def main():
         # Analyze traces
         analyze_traces_data(analyzer, all_traces)
         tab_general, tab_validate_fields = st.tabs(['General Info', 'Trace Validate-Field'])
+        # tab_general, tab_validate_fields, tab_profile_steps = st.tabs(['General Info', 'Trace Validate-Field', 'Profile Steps'])
         # Display results
         with tab_general:
             display_analysis_results_general(analyzer, all_traces)
@@ -1106,7 +1111,32 @@ def main():
             st.write('Used by Profile Wizard when validating each form field')  
             create_validate_field_charts(analyzer)
             display_analysis_result_validate_field(analyzer, all_traces)
-        
+        # with tab_profile_steps:
+
+        #     #Assignment fields into Wizard steps
+
+        #     carrier_goal_step_tmp = ['career_goals_short_term', 'short']
+        #     skill_step_tmp = ['tech', 'soft']
+            
+            
+        #     basic_info_fields = ['first_name', 'last_name', 'email', 'title', 'location', 'phone', 'linkedin', 'website']
+        #     carrier_goal_step = ['career_goals_short_term', 'career_goals_long_term', 'career_goals_industries',
+        #                          'short',
+        #                          'preferred_work_location', 'work_remote', 'work_hybrid', 'work_office',
+        #                          'team_size_preference',
+        #                          'language', 'level',
+        #                          'preferred_contract_type', 'preferred_employment_type', 'travel_willing']
+        #     skill_step = ['tech_skills', 'soft_skills']
+        #     experience_step = ['experience']#TODO
+        #     education_step = ['education', 'degree', 'institution']#TODO
+        #     courses_step = ['name', 'institution', 'month']
+        #     projects_step = ['name', 'start_date', 'end_date', 'description']
+        #     interests_step = ['interests']
+        #     summary_step = []#TODO?
+
+
+
+
     except Exception as e:
         raise e
         st.error(f"❌ An error occurred: {str(e)}")
