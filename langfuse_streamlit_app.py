@@ -310,15 +310,43 @@ class LangFuseTraceAnalyzer:
                                             self.langfuse_credentials['LANGFUSE_SECRET_KEY']
             ))
         obs_data = obs_response.json()
-        obs_data_clean = [o for o in obs_data['data'] if o['traceId'] in self.trace_names.keys()]
-        for o in obs_data_clean:
+        total_pages = obs_data['meta']['totalPages']
+
+########TMP NEW ALL
+
+
+        for pn in range(total_pages):
+            page_num = pn + 1
+            obs_response = requests.get(
+                f"{self.langfuse_credentials['LANGFUSE_HOST']}/api/public/observations",
+                params={
+                  "page": f"{page_num}",
+                "type": "GENERATION"
+                },
+                auth=HTTPBasicAuth(self.langfuse_credentials['LANGFUSE_PUBLIC_KEY'], self.langfuse_credentials['LANGFUSE_SECRET_KEY']
+            ))
+            obs_data = obs_response.json()
+            obs_data_clean = [o for o in obs_data['data'] if o['traceId'] in self.trace_names.keys()]
+            for o in obs_data_clean:
 #        for o in obs_data['data']:
-            print(f"obs_id {o['id']}, obs_trace {o['traceId']}")
-            obs_usage = self._get_observation_cost_usage(o)
-            self.usage_data.append(obs_usage)
-            if not self.usage_data_traces.get(obs_usage['trace_id'], None):
-                self.usage_data_traces[obs_usage['trace_id']] = []
-            self.usage_data_traces[obs_usage['trace_id']].append({'o_id':o['id'],'usage_cost':obs_usage})
+                print(f"obs_id {o['id']}, obs_trace {o['traceId']}")
+                obs_usage = self._get_observation_cost_usage(o)
+                self.usage_data.append(obs_usage)
+                if not self.usage_data_traces.get(obs_usage['trace_id'], None):
+                    self.usage_data_traces[obs_usage['trace_id']] = []
+                self.usage_data_traces[obs_usage['trace_id']].append({'o_id':o['id'],'usage_cost':obs_usage})
+
+##############OLD BUT WORKING FOR LIMIT 50
+
+#         obs_data_clean = [o for o in obs_data['data'] if o['traceId'] in self.trace_names.keys()]
+#         for o in obs_data_clean:
+# #        for o in obs_data['data']:
+#             print(f"obs_id {o['id']}, obs_trace {o['traceId']}")
+#             obs_usage = self._get_observation_cost_usage(o)
+#             self.usage_data.append(obs_usage)
+#             if not self.usage_data_traces.get(obs_usage['trace_id'], None):
+#                 self.usage_data_traces[obs_usage['trace_id']] = []
+#             self.usage_data_traces[obs_usage['trace_id']].append({'o_id':o['id'],'usage_cost':obs_usage})
             
 
 
@@ -1017,7 +1045,8 @@ def display_validate_field_analysis(analyzer):
             st.write(imp_df2)
         
         # Join data and cost analysis
-        join_df = imp_df2.merge(sdf2, on='trace_id', how='inner')
+        # join_df = imp_df2.merge(sdf2, on='trace_id', how='inner')
+        join_df = imp_df2.merge(sdf2, on='trace_id', how='outer')
         st.session_state['join_df'] = join_df
         with st.expander("Validate-Field: Join Data and Cost"):
             st.subheader("Calculation per field (Cost)")
@@ -1101,8 +1130,7 @@ def main():
         
         # Analyze traces
         analyze_traces_data(analyzer, all_traces)
-        tab_general, tab_validate_fields = st.tabs(['General Info', 'Trace Validate-Field'])
-        # tab_general, tab_validate_fields, tab_profile_steps = st.tabs(['General Info', 'Trace Validate-Field', 'Profile Steps'])
+        tab_general, tab_validate_fields, tab_profile_steps = st.tabs(['General Info', 'Trace Validate-Field', 'Profile Steps'])
         # Display results
         with tab_general:
             display_analysis_results_general(analyzer, all_traces)
@@ -1111,29 +1139,101 @@ def main():
             st.write('Used by Profile Wizard when validating each form field')  
             create_validate_field_charts(analyzer)
             display_analysis_result_validate_field(analyzer, all_traces)
-        # with tab_profile_steps:
+        with tab_profile_steps:
 
-        #     #Assignment fields into Wizard steps
+            #Assignment fields into Wizard steps
 
-        #     carrier_goal_step_tmp = ['career_goals_short_term', 'short']
-        #     skill_step_tmp = ['tech', 'soft']
+            carrier_goal_step_tmp = ['career_goals_short_term', 'short', 'career_goals_long_term', 'career_goals_industries']
+            skill_step_tmp = ['tech', 'soft']
+            
+            # st.header('MANUAL CREATION TESTING')
+            basic_info_step = ['first_name', 'last_name', 'email', 'title', 'location', 'phone', 'linkedin', 'website']
+            carrier_goal_step = ['career_goals_short_term', 'career_goals_long_term', 'career_goals_industries',
+                                 'short',
+                                 'preferred_work_location', 'work_remote', 'work_hybrid', 'work_office',
+                                 'team_size_preference',
+                                 'language', 'level',
+                                 'preferred_contract_type', 'preferred_employment_type', 'travel_willing']
+            skill_step = ['tech_skills', 'soft_skills']
+            experience_step = ['experience']#TODO
+            education_step = ['education', 'degree', 'institution']#TODO
+            courses_step = ['name', 'institution', 'month']
+            projects_step = ['name', 'start_date', 'end_date', 'description']
+            interests_step = ['interests']
+            summary_step = []#TODO?
+
+            # with st.expander('Basic Step Info'):
+            #     st.write('All traces from Step')
+            #     df_copy = st.session_state['join_df'].copy()
+            #     df_basic:pd.DataFrame = df_copy[df_copy['field_name'].isin(basic_info_step)]
+            #     st.write(df_basic)
+            #     st.write('Describe Step')
+    
+            #     st.write(df_basic.describe())
+            #     st.write('Step field list')
+            #     st.write(basic_info_step)
+
+            # with st.expander('Career Goals Info'):
+            #     st.write('All traces from Step')
+            #     df_copy = st.session_state['join_df'].copy()
+            #     df_cg:pd.DataFrame = df_copy[df_copy['field_name'].isin(carrier_goal_step_tmp)]
+            #     st.write(df_cg)
+            #     st.write('Describe Step')
+    
+            #     st.write(df_cg.describe())
+            #     st.write('Step field list')
+            #     st.write(carrier_goal_step_tmp)
+    
+
+                # st.write(df_cg)
+            st.header('Summary for each Profile Wizard Step')
+            step_fields_dict = {
+                        #    'carrier_goal_step_tmp' : ['career_goals_short_term', 'short', 'career_goals_industries'],
+                            # 'skill_step_tmp' : ['tech', 'soft'],
             
             
-        #     basic_info_fields = ['first_name', 'last_name', 'email', 'title', 'location', 'phone', 'linkedin', 'website']
-        #     carrier_goal_step = ['career_goals_short_term', 'career_goals_long_term', 'career_goals_industries',
-        #                          'short',
-        #                          'preferred_work_location', 'work_remote', 'work_hybrid', 'work_office',
-        #                          'team_size_preference',
-        #                          'language', 'level',
-        #                          'preferred_contract_type', 'preferred_employment_type', 'travel_willing']
-        #     skill_step = ['tech_skills', 'soft_skills']
-        #     experience_step = ['experience']#TODO
-        #     education_step = ['education', 'degree', 'institution']#TODO
-        #     courses_step = ['name', 'institution', 'month']
-        #     projects_step = ['name', 'start_date', 'end_date', 'description']
-        #     interests_step = ['interests']
-        #     summary_step = []#TODO?
+                            'basic_info_step' : ['first_name', 'last_name', 'email', 'title', 'location', 'phone', 'linkedin', 'website'],
+                            'carrier_goal_step' : ['career_goals_short_term', 'career_goals_long_term', 'career_goals_industries',
+                                 'short',
+                                 'preferred_work_location', 'work_remote', 'work_hybrid', 'work_office',
+                                 'team_size_preference',
+                                 'language', 'level',
+                                 'preferred_contract_type', 'preferred_employment_type', 'travel_willing'],
+                            'skill_step' : ['tech_skills', 'soft_skills'],
+                            'experience_step' : ['experience'],#TODO
+                            'education_step' : ['education', 'degree', 'institution'],#TODO
+                            'courses_step' : ['name', 'institution', 'month'],
+                            'projects_step' : ['name', 'start_date', 'end_date', 'description'],
+                            'interests_step' : ['interests'],
+                            'summary_step' : []#TODO?
+            }
+            expander_names_map = {
+                'basic_info_step': 'Basic Info',
+                'carrier_goal_step': 'Carrier Goals',
+                'skill_step': 'Skills',
+                'experience_step': 'Experience',
+                'courses_step': 'Courses',
+                'projects_step': 'Projects',
+                'interests_step': 'Interests',
 
+
+                }
+            for step_name, step_fields in step_fields_dict.items():
+                expander_name = expander_names_map.get(f"{step_name}", step_name)
+                with st.expander(f'Step: {expander_name}'):
+                    
+                    df_copy = st.session_state['join_df'].copy()
+                    df_basic:pd.DataFrame = df_copy[df_copy['field_name'].isin(step_fields)]
+                    with st.popover('Raw Records', use_container_width=True):
+                        st.write('Raw Records')
+                        st.write(df_basic)
+                    st.write('Basic summary (Pandas DF Describe)')
+                    if df_basic.empty:
+                        st.write('Empty DF. Nothing to describe')
+                    else:
+                        st.write(df_basic.describe())
+                    st.markdown("**Fields in Step**")
+                    st.write(step_fields)
 
 
 
